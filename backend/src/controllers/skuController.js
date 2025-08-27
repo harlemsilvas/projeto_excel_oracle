@@ -88,12 +88,13 @@ export async function getAnaliseSKU(req, res) {
 
     const result = await db.query(query, finalParams);
     const rows = result.rows.map((row) => ({
-      ...row,
-      // Converte strings separadas por vírgula em arrays
-      ANUNCIOS_IDS: row.ANUNCIOS_IDS
+      // ✅ Converte nomes das propriedades para lowercase para compatibilidade com frontend
+      sku: row.SKU,
+      total_anuncios: row.TOTAL_ANUNCIOS,
+      anuncios_ids: row.ANUNCIOS_IDS
         ? row.ANUNCIOS_IDS.split(",").map((id) => parseInt(id))
         : [],
-      TITULOS: row.TITULOS ? row.TITULOS.split(" | ") : [],
+      titulos: row.TITULOS ? row.TITULOS.split(" | ") : [],
     }));
 
     res.json({

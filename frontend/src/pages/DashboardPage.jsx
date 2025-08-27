@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import FiltroAnuncios from "../components/FiltroAnuncios";
 import ResumoCards from "../components/ResumoCards";
 import AnuncioTable from "../components/AnuncioTable";
+import ContadorAnuncios from "../components/ContadorAnuncios";
 
 export default function DashboardPage() {
   const [filtros, setFiltros] = useState({
@@ -158,6 +159,19 @@ export default function DashboardPage() {
       );
     } catch (err) {
       console.error("[DashboardPage fetchData] Erro ao buscar anúncios:", err);
+
+      // Tenta extrair mais detalhes se for um erro de fetch
+      let mensagemErro = "Erro desconhecido ao buscar anúncios.";
+      if (err.name === "TypeError" && err.message.includes("fetch")) {
+        mensagemErro =
+          "Erro de conexão. Verifique se o servidor backend está rodando.";
+      } else if (err.message && err.message.includes("HTTP 500")) {
+        mensagemErro =
+          "Erro no servidor (HTTP 500). Verifique os logs do backend.";
+      } else {
+        mensagemErro = err.message || mensagemErro;
+      }
+      // --- Fim do log aprimorado ---
       setDados((prev) => ({
         ...prev,
         data: [], // Em caso de erro, garante que 'data' seja um array vazio
@@ -180,7 +194,20 @@ export default function DashboardPage() {
     <div>
       <h1 className="text-2xl font-bold mb-6">📊 Dashboard de Anúncios</h1>
       <FiltroAnuncios filtros={filtros} onChange={handleFiltroChange} />
-      <ResumoCards filtros={filtros} />
+
+      <ContadorAnuncios total={dados.total} />
+      {/* <ResumoCards filtros={filtros} /> */}
+
+      <button
+        onClick={() => {
+          // Força atualização do resumo (se ainda quiser manter o ResumoCards oculto)
+          window.dispatchEvent(new CustomEvent("force-refresh-resumo"));
+        }}
+        className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded text-sm flex items-center gap-1"
+      >
+        🔄 Atualizar Dados
+      </button>
+
       {/* ✅ Passando dados.normalizados (agora com camelCase) para AnuncioTable */}
       <AnuncioTable
         dados={dados}

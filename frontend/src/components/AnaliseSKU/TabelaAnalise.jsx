@@ -1,9 +1,11 @@
 // src/components/AnaliseSKU/TabelaAnalise.jsx
 import { exportarParaExcel } from "../../utils/exportExcel";
 
-export default function TabelaAnalise({ dados, loading }) {
+export default function TabelaAnalise({ dados = [], loading }) {
   const handleExport = () => {
-    const exportData = dados.map((item) => ({
+    // ✅ Garante que dados seja um array antes de usar map
+    const dadosArray = Array.isArray(dados) ? dados : [];
+    const exportData = dadosArray.map((item) => ({
       SKU: item.sku,
       "Total de Anúncios": item.total_anuncios,
       // ✅ Verifica se anuncios_ids é um array antes de usar join
@@ -44,43 +46,58 @@ export default function TabelaAnalise({ dados, loading }) {
               </tr>
             </thead>
             <tbody>
-              {dados.map((item) => (
-                // ✅ Usar item.sku como key é mais seguro se for único
-                <tr
-                  key={item.sku}
-                  className="border-b hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-700"
-                >
-                  <td className="p-3 font-mono text-blue-600 dark:text-blue-400">
-                    {item.sku}
-                  </td>
-                  <td className="p-3">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        item.total_anuncios === 1
-                          ? "bg-green-100 text-green-800"
-                          : "bg-orange-100 text-orange-800"
-                      }`}
-                    >
-                      {item.total_anuncios}
-                    </span>
-                  </td>
-                  <td className="p-3 font-mono text-xs text-gray-600 dark:text-gray-400">
-                    {/* ✅ Verificação adicionada */}
-                    {Array.isArray(item.anuncios_ids)
-                      ? item.anuncios_ids.join(", ")
-                      : "-"}
-                  </td>
-                  <td className="p-3 text-gray-800 dark:text-gray-200">
-                    {item.titulos.map((t, idx) => (
-                      <div key={idx} className="mb-1 last:mb-0">
-                        {" "}
-                        {/* ✅ Key para cada título */}
-                        {t}
-                      </div>
-                    ))}
+              {/* ✅ Garante que dados seja um array antes de usar map */}
+              {Array.isArray(dados) && dados.length > 0 ? (
+                dados.map((item) => (
+                  // ✅ Usar item.sku como key é mais seguro se for único
+                  <tr
+                    key={item.sku}
+                    className="border-b hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-700"
+                  >
+                    <td className="p-3 font-mono text-blue-600 dark:text-blue-400">
+                      {item.sku}
+                    </td>
+                    <td className="p-3">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          item.total_anuncios === 1
+                            ? "bg-green-100 text-green-800"
+                            : "bg-orange-100 text-orange-800"
+                        }`}
+                      >
+                        {item.total_anuncios}
+                      </span>
+                    </td>
+                    <td className="p-3 font-mono text-xs text-gray-600 dark:text-gray-400">
+                      {/* ✅ Verificação adicionada */}
+                      {Array.isArray(item.anuncios_ids)
+                        ? item.anuncios_ids.join(", ")
+                        : "-"}
+                    </td>
+                    <td className="p-3 text-gray-800 dark:text-gray-200">
+                      {/* ✅ Verificação adicionada para titulos */}
+                      {Array.isArray(item.titulos) ? (
+                        item.titulos.map((t, idx) => (
+                          <div key={idx} className="mb-1 last:mb-0">
+                            {t}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-gray-500">N/A</div>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td
+                    colSpan="4"
+                    className="p-6 text-center text-gray-500 dark:text-gray-400"
+                  >
+                    {loading ? "Carregando dados..." : "Nenhum dado encontrado"}
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>

@@ -5,6 +5,7 @@ import cors from "cors"; // ✅ Importe o cors
 import { limiter } from "./middlewares/rateLimiter.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
 import routes from "./routes/index.js";
+import {} from "./routes/integracaoRoutes.js";
 
 const app = express();
 

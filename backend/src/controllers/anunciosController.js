@@ -1,12 +1,97 @@
 // src/controllers/anunciosController.js
 import db from "../config/db.js";
 
+/**
+ * @swagger
+ * /api/anuncios:
+ *   get:
+ *     summary: Retorna uma lista paginada de anúncios
+ *     description: Busca anúncios com filtros opcionais por tipo, SKU, título, integração e paginação.
+ *     parameters:
+ *       - in: query
+ *         name: tipo_anuncio
+ *         schema:
+ *           type: string
+ *         description: Filtra por tipo de anúncio.
+ *       - in: query
+ *         name: produto_sku
+ *         schema:
+ *           type: string
+ *         description: Filtra por SKU do produto.
+ *       - in: query
+ *         name: q
+ *         schema:
+ *           type: string
+ *         description: Busca textual no título (case-insensitive).
+ *       - in: query
+ *         name: integracao
+ *         schema:
+ *           type: string
+ *         description: Filtra por nome da integração.
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: Número da página.
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 10
+ *         description: Número de itens por página.
+ *       - in: query
+ *         name: ordenarPor
+ *         schema:
+ *           type: string
+ *           enum: [id, preco, titulo, data_criacao]
+ *           default: id
+ *         description: Campo para ordenação.
+ *       - in: query
+ *         name: ordem
+ *         schema:
+ *           type: string
+ *           enum: [ASC, DESC]
+ *           default: ASC
+ *         description: Direção da ordenação.
+ *     responses:
+ *       200:
+ *         description: Uma lista de anúncios.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Anuncio'
+ *                 page:
+ *                   type: integer
+ *                   example: 1
+ *                 limit:
+ *                   type: integer
+ *                   example: 10
+ *                 total:
+ *                   type: integer
+ *                   example: 100
+ *                 total_pages:
+ *                   type: integer
+ *                   example: 10
+ *       500:
+ *         description: Erro interno do servidor.
+ */
 export async function getAnuncios(req, res) {
   try {
+    // Desestruturação dos parâmetros, incluindo o novo 'integracao'
     let {
       tipo_anuncio: tipo,
       produto_sku: sku,
       q,
+      integracao, // ✅ Novo parâmetro
       page = 1,
       limit = 10,
       ordenarPor = "id",
@@ -18,37 +103,34 @@ export async function getAnuncios(req, res) {
     const limitNum = Math.max(Math.min(parseInt(limit, 10) || 10, 100), 1);
     const offset = (pageNum - 1) * limitNum;
 
-    // Ordenação segura (mapeando para colunas do Oracle)
-    const colunasPermitidas = {
-      id: "ID",
-      preco: "PRECO",
-      titulo: "TITULO",
-      data_criacao: "DATA_CRIACAO",
-    };
-
-    // Verifica se a coluna de ordenação é válida
-    const sortColumnOracle = colunasPermitidas[ordenarPor] || "ID";
+    // Ordenação segura
+    const colunasPermitidas = ["id", "preco", "titulo", "data_criacao"];
+    const sortColumn = colunasPermitidas.includes(ordenarPor)
+      ? ordenarPor
+      : "id";
     const sortOrder = ordem.toLowerCase() === "desc" ? "DESC" : "ASC";
 
     // Construção da query
     let whereClause = [];
-    let params = {};
-    let paramIndex = 1;
+    let params = [];
+    let idx = 1;
 
     if (tipo) {
-      params[`p${paramIndex}`] = tipo;
-      whereClause.push(`TIPO_ANUNCIO = :p${paramIndex}`);
-      paramIndex++;
+      params.push(tipo);
+      whereClause.push(`TIPO_ANUNCIO = :p${idx++}`);
     }
     if (sku) {
-      params[`p${paramIndex}`] = sku;
-      whereClause.push(`PRODUTO_SKU = :p${paramIndex}`);
-      paramIndex++;
+      params.push(sku);
+      whereClause.push(`PRODUTO_SKU = :p${idx++}`);
     }
     if (q) {
-      params[`p${paramIndex}`] = `%${q}%`;
-      whereClause.push(`TITULO LIKE :p${paramIndex}`);
-      paramIndex++;
+      params.push(`%${q}%`);
+      whereClause.push(`TITULO LIKE '%' || :p${idx++} || '%'`);
+    }
+    // ✅ Adicionar filtro por integração
+    if (integracao) {
+      params.push(integracao);
+      whereClause.push(`INTEGRACAO = :p${idx++}`);
     }
 
     const whereSql =
@@ -62,7 +144,10 @@ export async function getAnuncios(req, res) {
 
     // Adiciona parâmetros de paginação
     const finalParams = {
-      ...params,
+      ...params.reduce((acc, val, i) => {
+        acc[`p${i + 1}`] = val;
+        return acc;
+      }, {}),
       limit: limitNum,
       offset: offset,
     };
@@ -71,37 +156,15 @@ export async function getAnuncios(req, res) {
     const query = `
       SELECT * FROM ANUNCIOS
       ${whereSql}
-      ORDER BY ${sortColumnOracle} ${sortOrder}
+      ORDER BY ${sortColumn} ${sortOrder}
       OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
     `;
 
     const result = await db.query(query, finalParams);
 
-    // ✅ Processa as linhas para garantir que sejam objetos simples
-    const processedRows = result.rows.map((row) => {
-      const simpleRow = {};
-      for (const key in row) {
-        // Verifica se o valor é um tipo primitivo ou Date
-        if (
-          row[key] === null ||
-          row[key] === undefined ||
-          typeof row[key] === "string" ||
-          typeof row[key] === "number" ||
-          typeof row[key] === "boolean" ||
-          row[key] instanceof Date
-        ) {
-          simpleRow[key] = row[key];
-        } else {
-          // Converte outros tipos para string (ex: LOBs, Buffers)
-          simpleRow[key] = String(row[key]);
-        }
-      }
-      return simpleRow;
-    });
-
-    // ✅ Retorna apenas dados simples e serializáveis
+    // Resposta no formato esperado
     res.json({
-      data: processedRows,
+      data: result.rows,
       page: pageNum,
       limit: limitNum,
       total,
@@ -112,36 +175,3 @@ export async function getAnuncios(req, res) {
     res.status(500).json({ error: "Erro ao buscar anúncios" });
   }
 }
-
-/*
-Principais diferenças entre PostgreSQL e Oracle
-pool.query()
-db.query()
-✅ Usando o novo pool do Oracle
-tipo_anuncio = $1
-TIPO_ANUNCIO = :p1
-✅ Parâmetros nomeados
-titulo ILIKE $1
-TITULO LIKE :p1
-✅
-LIKE
-(Oracle é case-insensitive)
-LIMIT $1 OFFSET $2
-OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
-✅ Paginação Oracle 12c+
-rows[0].total
-rows[0].TOTAL
-✅ Colunas em maiúsculo
-ordenarPor
-sortColumnOracle
-✅ Mapeamento de colunas
-
-✅ Recursos utilizados
-✅ Parâmetros nomeados (:p1, :p2) - mais legíveis e seguros
-✅ Paginação com OFFSET/FETCH - padrão Oracle 12c+
-✅ Mapeamento de colunas - de snake_case para UPPER_CASE
-✅ LIKE para buscas textuais - substituto do ILIKE
-✅ Tratamento de nomes de colunas - Oracle retorna em maiúsculo
-✅ Agora seu endpoint GET /api/anuncios vai funcionar perfeitamente com o Oracle.
-
-*/

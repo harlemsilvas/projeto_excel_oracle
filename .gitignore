@@ -27,3 +27,7 @@ yarn-debug.log
 /entrada
 /saida
 /removidos
+
+*.sql
+*.xlsx
+*.xls

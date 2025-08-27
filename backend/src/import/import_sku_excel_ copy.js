@@ -85,7 +85,7 @@ function parseNumero(valor) {
   return numero;
 }
 
-// ... (imports e configuração iniciais) ...
+// --- Função Principal de Importação ---
 
 async function importarProdutosExcel() {
   let connection;
@@ -97,60 +97,62 @@ async function importarProdutosExcel() {
     console.log("✅ Conectado ao Oracle");
 
     // --- Leitura do Arquivo Excel ---
+    // Caminho do arquivo Excel
     const caminhoArquivo = path.join(__dirname, "../saida/produtos_sku.xls");
     console.log(`📂 Tentando ler o arquivo: ${caminhoArquivo}`);
 
+    // ✅ Verifica se o arquivo existe
     if (!fs.existsSync(caminhoArquivo)) {
       throw new Error(`Arquivo não encontrado: ${caminhoArquivo}`);
     }
 
     const workbook = XLSX.readFile(caminhoArquivo);
-    const sheetName = workbook.SheetNames[0];
+    const sheetName = workbook.SheetNames[0]; // Assume que os dados estão na primeira aba
     const sheet = workbook.Sheets[sheetName];
 
-    // ✅ Lê os dados como uma matriz (array de arrays)
+    // O arquivo tem cabeçalhos válidos na primeira linha
     const dadosBrutos = XLSX.utils.sheet_to_json(sheet, {
-      header: 1,
       defval: null,
+      range: 1, // Pula a primeira linha (headers) e lê os dados
     });
     console.log(
-      `\n📊 Linhas brutas encontradas no Excel: ${dadosBrutos.length}`
+      `\n📊 Registros encontrados no Excel (brutos): ${dadosBrutos.length}`
     );
 
-    if (dadosBrutos.length < 2) {
-      console.log("⚠️ Arquivo Excel vazio ou sem cabeçalhos.");
-      process.exit(0);
+    // ✅ DEBUG: Vamos inspecionar a estrutura dos dados
+    if (dadosBrutos.length > 0) {
+      console.log("\n🔍 DEBUG: Inspecionando estrutura dos dados...");
+      console.log("📋 Colunas encontradas:", Object.keys(dadosBrutos[0]));
+      console.log("\n📄 Primeiras 3 linhas de exemplo:");
+      dadosBrutos.slice(0, 3).forEach((linha, index) => {
+        console.log(`   Linha ${index + 1}:`);
+        const chaves = Object.keys(linha);
+        chaves.slice(0, 8).forEach((chave) => {
+          console.log(`     ${chave}: ${linha[chave]}`);
+        });
+        console.log(`     ... (${chaves.length} colunas no total)`);
+      });
     }
 
-    // ✅ Assume que a primeira linha é o cabeçalho (mesmo que inválido)
-    // e as linhas subsequentes são os dados
-    const linhasDados = dadosBrutos.slice(1); // Remove o cabeçalho
-    console.log(
-      `📊 Linhas de dados após remover cabeçalho: ${linhasDados.length}`
-    );
-
-    // ✅ Filtra linhas totalmente vazias
-    const dados = linhasDados.filter((linha) => {
-      // Verifica se pelo menos uma célula não é nula
-      return linha.some(
-        (celula) =>
-          celula !== null &&
-          celula !== undefined &&
-          String(celula).trim() !== ""
-      );
+    // ✅ Filtra registros com SKU vazio ou nulo
+    // Baseado no debug, o SKU está na coluna com chave '7000000'
+    const dados = dadosBrutos.filter((linha) => {
+      const sku = linha["7000000"]; // Esta é a coluna que contém os SKUs
+      return sku !== null && sku !== undefined && String(sku).trim() !== "";
     });
-    console.log(`📊 Linhas de dados após filtrar vazias: ${dados.length}`);
+    console.log(`📊 Registros após filtrar SKUs vazios: ${dados.length}`);
 
     if (dados.length === 0) {
       console.log("⚠️ Nenhum dado válido encontrado para importar.");
       process.exit(0);
     }
 
-    // --- Limpeza das Tabelas ---
+    // --- Limpeza das Tabelas (TRUNCATE) ---
     console.log("\n🗑️ Limpando tabelas antes da importação...");
     try {
       await connection.execute("TRUNCATE TABLE PRODUTO_IMAGENS");
       console.log("✅ Tabela PRODUTO_IMAGENS limpa.");
+
       await connection.execute("TRUNCATE TABLE PRODUTOS");
       console.log("✅ Tabela PRODUTOS limpa.");
     } catch (truncateError) {
@@ -184,7 +186,7 @@ async function importarProdutosExcel() {
     `;
 
     // --- Processamento em Lotes ---
-    const batchSize = 50;
+    const batchSize = 50; // Tamanho do lote para inserção
     const totalBatches = Math.ceil(dados.length / batchSize);
 
     console.log(
@@ -194,6 +196,7 @@ async function importarProdutosExcel() {
     let totalProdutosInseridos = 0;
     let totalImagensInseridas = 0;
 
+    // Loop principal para processar os lotes
     for (let i = 0; i < dados.length; i += batchSize) {
       const batch = dados.slice(i, i + batchSize);
       const batchNumber = Math.floor(i / batchSize) + 1;
@@ -205,51 +208,85 @@ async function importarProdutosExcel() {
       );
 
       try {
+        // Não precisamos do BEGIN manual, o autoCommit: false já gerencia a transação
+        console.log(
+          `   🔁 [Lote ${batchNumber}] Transação iniciada (autoCommit: false).`
+        );
+
+        // Processa cada linha do lote
         for (const linha of batch) {
-          // ✅ Mapeamento por índice fixo (baseado na estrutura do Excel)
-          // Ajuste os índices conforme a posição real das colunas no Excel
+          // --- Mapeamento dos dados da planilha para as colunas da tabela ---
+          // Como o Excel não tem headers válidos, usamos as chaves que a biblioteca XLSX criou
           const bindsProduto = {
-            id_sistema: parseNumero(linha[0]), // Coluna A
-            codigo_sku: linha[1] ? String(linha[1]).trim() : null, // Coluna B
-            descricao: linha[2] ? String(linha[2]).substring(0, 3999) : null, // Coluna C
-            unidade: linha[3] ? String(linha[3]).substring(0, 9) : null, // Coluna D
-            classificacao_fiscal: linha[4]
-              ? String(linha[4]).substring(0, 19)
-              : null, // Coluna E
-            origem: linha[5] ? String(linha[5]).substring(0, 254) : null, // Coluna F
-            preco: parseNumero(linha[6]), // Coluna G
-            valor_ipi_fixo: parseNumero(linha[7]), // Coluna H
-            observacoes: linha[8] ? String(linha[8]).substring(0, 3999) : null, // Coluna I
-            situacao: linha[9] ? String(linha[9]).substring(0, 49) : null, // Coluna J
-            estoque: parseNumero(linha[10]), // Coluna K
-            preco_custo: parseNumero(linha[11]), // Coluna L
-            cod_fornecedor: linha[12]
-              ? String(linha[12]).substring(0, 99)
-              : null, // Coluna M
-            fornecedor: linha[13] ? String(linha[13]).substring(0, 254) : null, // Coluna N
-            localizacao: linha[14] ? String(linha[14]).substring(0, 254) : null, // Coluna O
-            estoque_maximo: parseNumero(linha[15]), // Coluna P
-            estoque_minimo: parseNumero(linha[16]), // Coluna Q
-            peso_liquido_kg: parseNumero(linha[17]), // Coluna R
-            peso_bruto_kg: parseNumero(linha[18]), // Coluna S
-            gtin_ean: linha[19] ? String(linha[19]).substring(0, 13) : null, // Coluna T
-            gtin_ean_tributavel: linha[20]
-              ? String(linha[20]).substring(0, 13)
-              : null, // Coluna U
-            descricao_complementar: linha[21]
-              ? String(linha[21]).substring(0, 3999)
-              : null, // Coluna V
-            cest: linha[22] ? String(linha[22]).substring(0, 9) : null, // Coluna W
-            categoria: linha[23] ? String(linha[23]).substring(0, 499) : null, // Coluna X
-            marca: linha[24] ? String(linha[24]).substring(0, 99) : null, // Coluna Y
-            garantia: linha[25] ? String(linha[25]).substring(0, 99) : null, // Coluna Z
+            id_sistema: parseNumero(linha["612377483"]), // Esta coluna contém IDs
+            codigo_sku: linha["7000000"]
+              ? String(linha["7000000"]).trim()
+              : null, // SKU
+            descricao: linha[
+              "4 Uni Tampa Plástica Para Metalon 30x30 3x3 3cm 30mm Interna - Preto"
+            ]
+              ? String(
+                  linha[
+                    "4 Uni Tampa Plástica Para Metalon 30x30 3x3 3cm 30mm Interna - Preto"
+                  ]
+                ).substring(0, 3999)
+              : null, // Descrição
+            unidade: linha["Pç"] ? String(linha["Pç"]).substring(0, 9) : null, // Unidade
+            classificacao_fiscal: linha["8714.10.00"]
+              ? String(linha["8714.10.00"]).substring(0, 19)
+              : null, // CF
+            origem: linha["0 - Nacional, exceto as indicadas nos códigos 3 a 5"]
+              ? String(
+                  linha["0 - Nacional, exceto as indicadas nos códigos 3 a 5"]
+                ).substring(0, 254)
+              : null, // Origem
+            preco: parseNumero(linha["19.9"]), // Preço
+            valor_ipi_fixo: parseNumero(linha["__EMPTY"]), // IPI (pode estar vazio)
+            observacoes: null, // Não identificada
+            situacao: linha["Ativo"]
+              ? String(linha["Ativo"]).substring(0, 49)
+              : null, // Situação
+            estoque: parseNumero(linha["-12"]), // Estoque
+            preco_custo: parseNumero(linha["0_1"]), // Preço de custo
+            cod_fornecedor: linha["__EMPTY_1"]
+              ? String(linha["__EMPTY_1"]).substring(0, 99)
+              : null, // Cód Fornecedor
+            fornecedor: linha["__EMPTY_2"]
+              ? String(linha["__EMPTY_2"]).substring(0, 254)
+              : null, // Fornecedor
+            localizacao: linha["__EMPTY_3"]
+              ? String(linha["__EMPTY_3"]).substring(0, 254)
+              : null, // Localização
+            estoque_maximo: parseNumero(linha["0_2"]), // Estoque máximo
+            estoque_minimo: parseNumero(linha["0_3"]), // Estoque mínimo
+            peso_liquido_kg: parseNumero(linha["0_4"]), // Peso líquido
+            peso_bruto_kg: parseNumero(linha["0_5"]), // Peso bruto
+            gtin_ean: null, // Não identificada claramente
+            gtin_ean_tributavel: null, // Não identificada
+            descricao_complementar: null, // Não identificada
+            cest: null, // Não identificada
+            categoria: null, // Não identificada
+            marca: null, // Não identificada
+            garantia: null, // Não identificada
             sob_encomenda:
-              linha[26] === "Sim" ? "S" : linha[26] === "Não" ? "N" : null, // Coluna AA
-            preco_promocional: parseNumero(linha[27]), // Coluna AB
+              linha["S"] === "S" ? "S" : linha["S"] === "N" ? "N" : null, // Sob encomenda
+            preco_promocional: null, // Não identificada
           };
 
-          // --- Log para depuração (opcional) ---
-          // console.log(`   📥 [Lote ${batchNumber}] Preparando binds para SKU ${bindsProduto.codigo_sku}:`, bindsProduto);
+          // --- Log para depuração de binds (ativado para debug) ---
+          console.log(
+            `   📥 [Lote ${batchNumber}] Preparando binds para SKU ${bindsProduto.codigo_sku}:`
+          );
+          console.log("     ID:", bindsProduto.id_sistema);
+          console.log("     SKU:", bindsProduto.codigo_sku);
+          console.log(
+            "     Descrição:",
+            bindsProduto.descricao
+              ? bindsProduto.descricao.substring(0, 50) + "..."
+              : "null"
+          );
+          console.log("     Unidade:", bindsProduto.unidade);
+          console.log("     Preço:", bindsProduto.preco);
 
           // --- Inserção do Produto ---
           try {
@@ -258,19 +295,15 @@ async function importarProdutosExcel() {
             });
             produtosInseridosNoLote++;
             totalProdutosInseridos++;
+            // console.log(`   ✅ [Lote ${batchNumber}] Produto inserido: ${bindsProduto.codigo_sku}`);
 
             // --- Inserção das Imagens (se existirem) ---
             const skuProduto = bindsProduto.codigo_sku;
             if (skuProduto) {
               // Array para armazenar as URLs de imagem desta linha
+              // Como não identificamos colunas de imagem na estrutura atual,
+              // vamos pular a inserção de imagens por enquanto
               const urlsImagem = [];
-              // Assume que as URLs de imagem estão nas colunas AC (28) a AH (33)
-              for (let j = 28; j <= 33; j++) {
-                const url = linha[j];
-                if (url && String(url).trim() !== "") {
-                  urlsImagem.push(String(url).trim());
-                }
-              }
 
               // Se houver URLs, insere na tabela PRODUTO_IMAGENS
               for (let k = 0; k < urlsImagem.length; k++) {
@@ -289,11 +322,14 @@ async function importarProdutosExcel() {
               }
             }
           } catch (insertError) {
+            // Log do erro mas continua com o lote
             console.error(
               `\n❌ [Lote ${batchNumber}] Erro ao inserir produto (ID Sist: ${bindsProduto.id_sistema} | SKU: ${bindsProduto.codigo_sku}):`,
               insertError.message
             );
-            continue;
+            // Opcional: Interromper o lote ou pular o registro?
+            // throw insertError; // Para interromper o lote
+            continue; // Para pular o registro com erro e continuar
           }
         }
 
@@ -308,13 +344,15 @@ async function importarProdutosExcel() {
           `\n💥 [Lote ${batchNumber}] Erro FATAL ao processar lote:`,
           batchError.message
         );
+        // Decide se aborta a importação inteira ou continua com os próximos lotes
+        // throw batchError; // Para abortar
         console.warn(`⚠️ [Lote ${batchNumber}] Lote pulado devido a erro.`);
       }
 
       console.log(
         `--- Finalizado processamento do Lote ${batchNumber}/${totalBatches} ---\n`
       );
-    }
+    } // Fim do loop principal for (let i = 0; i < dados.length; i += batchSize)
 
     console.log(`\n🎉 Importação concluída!`);
     console.log(`   📦 Total de produtos inseridos: ${totalProdutosInseridos}`);
@@ -322,9 +360,12 @@ async function importarProdutosExcel() {
 
     process.exit(0);
   } catch (error) {
+    // --- Tratamento de Erro Geral ---
     console.error("\n💥 Erro ao importar dados:", error.message || error);
+
     process.exit(1);
   } finally {
+    // --- Fechamento da Conexão ---
     if (connection) {
       try {
         await connection.close();
@@ -336,4 +377,5 @@ async function importarProdutosExcel() {
   }
 }
 
+// --- Inicia a importação ---
 importarProdutosExcel();

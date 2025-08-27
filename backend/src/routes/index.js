@@ -7,6 +7,7 @@ import skuRoutes from "./skuRoutes.js";
 // ✅ Importe integracaoRoutes aqui
 import integracaoRoutes from "./integracaoRoutes.js"; // <--- Esta linha estava faltando
 import analiseRoutes from "./analiseRoutes.js";
+import produtosRoutes from "../produtos/routes/produtosRoutes.js";
 
 const router = Router();
 
@@ -23,5 +24,7 @@ router.use("/sku", skuRoutes); // -> /api/sku/...
 // ✅ Agora que está importado, você pode usá-lo aqui
 router.use("/integracoes", integracaoRoutes); // -> /api/integracoes
 router.use("/analise", analiseRoutes); // -> /api/analise/...
+// ✅ Nova rota para produtos
+router.use("/produtos", produtosRoutes);
 
 export default router;

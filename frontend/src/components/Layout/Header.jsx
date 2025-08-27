@@ -44,6 +44,12 @@ export default function Header() {
           >
             Análise de Integrações
           </button>
+          <button
+            onClick={() => navigate("/produtos")}
+            className="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 transition"
+          >
+            📦 Produtos
+          </button>
         </nav>
 
         {/* Usuário e Logout */}

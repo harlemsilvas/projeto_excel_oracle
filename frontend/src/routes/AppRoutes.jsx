@@ -8,6 +8,7 @@ import ProtectedRoute from "../components/ProtectedRoute";
 import AnaliseTiposPage from "../pages/AnaliseTiposPage";
 import AnaliseSkusPage from "../pages/AnaliseSkusPage";
 import DetalheAnunciosPage from "../pages/DetalheAnunciosPage";
+import ProdutosPage from "../pages/ProdutosPage";
 
 export default function AppRoutes() {
   return (
@@ -45,6 +46,7 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route path="/produtos" element={<ProdutosPage />} />
       {/* Redireciona qualquer rota inválida para o dashboard */}
       <Route
         path="/analise/integracoes/:integracao/tipos"

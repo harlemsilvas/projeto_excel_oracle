@@ -24,10 +24,16 @@ yarn-debug.log
 *.swp
 *.swo
 
-/entrada
-/saida
-/removidos
+entrada
+saida
+removidos
 
 *.sql
 *.xlsx
 *.xls
+
+# JEnv local Java version configuration file
+.java-version
+
+# Used by previous versions of JEnv
+.jenv-version

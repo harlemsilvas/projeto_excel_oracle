@@ -9,7 +9,7 @@ import win32com.client as win32
 # Pastas
 pasta_entrada = "entrada"
 pasta_saida = "saida"
-nome_saida = "todos.xlsx"
+nome_saida = "todos_sku.xlsx"
 
 # Criar pastas se não existirem
 os.makedirs(pasta_entrada, exist_ok=True)

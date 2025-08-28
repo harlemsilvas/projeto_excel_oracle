@@ -244,7 +244,7 @@ async function importarProdutosExcel() {
             marca: linha[24] ? String(linha[24]).substring(0, 99) : null, // Coluna Y
             garantia: linha[25] ? String(linha[25]).substring(0, 99) : null, // Coluna Z
             sob_encomenda:
-              linha[26] === "Sim" ? "S" : linha[26] === "Não" ? "N" : null, // Coluna AA
+              linha[26] === "Sim" ? "S" : linha[26] === "Não" ? "N" : null, // Coluna AA  coluna é kit ou não é kit
             preco_promocional: parseNumero(linha[27]), // Coluna AB
           };
 

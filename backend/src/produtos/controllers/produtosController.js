@@ -118,20 +118,20 @@ export async function getProdutos(req, res) {
     let idx = 1;
 
     if (sku) {
-      params.push(sku);
-      whereClause.push(`CODIGO_SKU = :p${idx++}`);
+      params.push(sku.toUpperCase());
+      whereClause.push(`UPPER(CODIGO_SKU) = :p${idx++}`);
     }
     if (q) {
-      params.push(`%${q}%`);
-      whereClause.push(`DESCRICAO LIKE '%' || :p${idx++} || '%'`);
+      params.push(`%${q.toUpperCase()}%`);
+      whereClause.push(`UPPER(DESCRICAO) LIKE :p${idx++}`);
     }
     if (categoria) {
-      params.push(`%${categoria}%`);
-      whereClause.push(`CATEGORIA LIKE '%' || :p${idx++} || '%'`);
+      params.push(`%${categoria.toUpperCase()}%`);
+      whereClause.push(`UPPER(CATEGORIA) LIKE :p${idx++}`);
     }
     if (marca) {
-      params.push(`%${marca}%`);
-      whereClause.push(`MARCA LIKE '%' || :p${idx++} || '%'`);
+      params.push(`%${marca.toUpperCase()}%`);
+      whereClause.push(`UPPER(MARCA) LIKE :p${idx++}`);
     }
 
     const whereSql =
@@ -356,7 +356,7 @@ export async function getProdutoPorSku(req, res) {
       return res.status(400).json({ error: "SKU é obrigatório." });
     }
 
-    const query = `SELECT * FROM PRODUTOS WHERE CODIGO_SKU = :sku`;
+    const query = `SELECT * FROM PRODUTOS WHERE UPPER(CODIGO_SKU) = UPPER(:sku)`;
 
     console.log("Executing single product query for SKU:", sku);
 
@@ -537,7 +537,7 @@ export async function getImagensPorSku(req, res) {
     const query = `
       SELECT URL_IMAGEM AS url, TIPO_IMAGEM AS tipo, ORDEM_IMAGEM AS ordem
       FROM PRODUTO_IMAGENS
-      WHERE SKU_PRODUTO = :sku
+      WHERE UPPER(SKU_PRODUTO) = UPPER(:sku)
       ORDER BY ORDEM_IMAGEM ASC
     `;
     const result = await db.query(query, { sku });

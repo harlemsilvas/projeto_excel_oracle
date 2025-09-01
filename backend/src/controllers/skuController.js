@@ -14,8 +14,8 @@ export async function getAnaliseSKU(req, res) {
     let paramIndex = 1;
 
     if (q) {
-      params[`p${paramIndex}`] = `%${q}%`;
-      whereClause.push(`produto_sku LIKE :p${paramIndex}`);
+      params[`p${paramIndex}`] = `%${q.toUpperCase()}%`;
+      whereClause.push(`UPPER(produto_sku) LIKE :p${paramIndex}`);
       paramIndex++;
     }
 

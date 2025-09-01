@@ -27,8 +27,8 @@ export async function getResumo(req, res) {
       binds.produto_sku = produto_sku;
     }
     if (q) {
-      sql += ` AND TITULO LIKE '%' || :q || '%'`;
-      binds.q = q;
+      sql += ` AND UPPER(TITULO) LIKE :q`;
+      binds.q = `%${q.toUpperCase()}%`;
     }
 
     const result = await db.query(sql, binds);

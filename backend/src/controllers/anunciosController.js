@@ -120,12 +120,12 @@ export async function getAnuncios(req, res) {
       whereClause.push(`TIPO_ANUNCIO = :p${idx++}`);
     }
     if (sku) {
-      params.push(sku);
-      whereClause.push(`PRODUTO_SKU = :p${idx++}`);
+      params.push(sku.toUpperCase());
+      whereClause.push(`UPPER(PRODUTO_SKU) = :p${idx++}`);
     }
     if (q) {
-      params.push(`%${q}%`);
-      whereClause.push(`TITULO LIKE '%' || :p${idx++} || '%'`);
+      params.push(`%${q.toUpperCase()}%`);
+      whereClause.push(`UPPER(TITULO) LIKE :p${idx++}`);
     }
     // ✅ Adicionar filtro por integração
     if (integracao) {

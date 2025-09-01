@@ -106,7 +106,13 @@ export async function getProdutos(req, res) {
     const offset = (pageNum - 1) * limitNum;
 
     // Ordenação segura
-    const colunasPermitidas = ["id", "preco", "titulo", "data_criacao"];
+    const colunasPermitidas = [
+      "id",
+      "codigo_sku",
+      "descricao",
+      "preco_custo",
+      "preco",
+    ];
     const sortColumn = colunasPermitidas.includes(ordenarPor)
       ? ordenarPor
       : "id";
